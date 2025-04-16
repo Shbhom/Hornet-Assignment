@@ -1,6 +1,6 @@
 # Product Service Microservice
 A RESTful microservice for managing products with PostgreSQL and Redis caching written in GO.
-
+Initially Seeded 10 Products to the Database using docker volume mount
 ## Setup
 
 ### Environment Variable
@@ -18,7 +18,7 @@ create .env file with the following configuration
 
 ### building the application
 
-Use the following command to build the application 
+first we have to build the application and to build the application use the following command 
 ```bash
 docker compose build
 ```
@@ -44,7 +44,7 @@ docker compose logs app -f
     ```bash
         curl http://localhost:8080/products?page=2&limit=5
     ```
-    Response:
+    Sample Response:
     ```json
     {
       "data": [
@@ -64,7 +64,7 @@ docker compose logs app -f
     ```bash
     curl http://localhost:8080/products/3
     ```
-    Response:
+    Sample Response:
     ```json
     {"id":3,"name":"Headphones","price":149.99}
     ```
@@ -76,7 +76,7 @@ docker compose logs app -f
       -H "Content-Type: application/json" \
       -d '{"name": "Gaming Console", "Price": 499.99}'
     ```
-    Response:
+    Sample Response:
     ```json
     {"name":"Gaming Console","Price":499.99}
     ```
@@ -90,7 +90,7 @@ docker compose logs app -f
       -H "Content-Type: application/json" \
       -d '{"name": "4K Monitor", "Price": 299.99}'
     ```
-    Response:
+    Sample Response:
     ```json
     {"id":5,"name":"4K Monitor","price":299.99}
     ```
@@ -104,3 +104,29 @@ docker compose logs app -f
     ```
 
     Response: 204 No Content
+
+## Bonus Requirements
+
+
+- Json Body Schema for Create and Update Endpoints
+  ```go
+  type createProductRequest struct {
+  	Name  string  `json:"name" binding:"required"`
+  	Price float64 `json:"Price" binding:"required,gt=0"`
+  }
+
+  type updateProductRequest struct {
+  	Name  string  `json:"name" binding:"omitempty"`
+  	Price float64 `json:"Price" binding:"omitempty,gt=0"`
+  }
+  ```
+- Added Cache Miss or Hit logs
+  ```
+  app-1  | 2025/04/16 18:31:41 Cache Hit for product id: 2
+  app-1  | [GIN] 2025/04/16 - 18:31:41 | 200 |     602.893µs |      172.18.0.1 | GET      "/products/2"
+  app-1  | [GIN] 2025/04/16 - 18:31:55 | 200 |    6.678972ms |      172.18.0.1 | POST     "/products"
+  app-1  | 2025/04/16 18:32:01 Cache Miss for product Id: 14
+  ```
+- Added pagination (Demonstrated in demo video)
+- Used Env vars for Postgres and Redis (above in the readme)
+- Dockerized the service
