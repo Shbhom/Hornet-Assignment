@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -34,8 +35,8 @@ type createProductRequest struct {
 }
 
 type updateProductRequest struct {
-	Name  string  `json:"name" binding:"required"`
-	Price float64 `json:"Price"`
+	Name  string  `json:"name" binding:"omitempty"`
+	Price float64 `json:"Price" binding:"omitempty,gt=0"`
 }
 
 // global Variables (Clients)
@@ -236,9 +237,28 @@ func updateProduct(c *gin.Context) {
 		return
 	}
 
+	var setClauses []string
+	var params []interface{}
+
+	if req.Name != "" {
+		setClauses = append(setClauses, fmt.Sprintf("name = $%d", len(params)+1))
+		params = append(params, req.Name)
+	}
+	if req.Price > 0 {
+		setClauses = append(setClauses, fmt.Sprintf("price = $%d", len(params)+1))
+		params = append(params, req.Price)
+	}
+	if len(setClauses) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "no valid fields provided for update"})
+		return
+	}
+
+	params = append(params, id)
+	query := fmt.Sprintf("UPDATE products SET %s WHERE id = $%d RETURNING id, name, price", strings.Join(setClauses, ", "), len(params))
+
 	var product Product
 
-	err := db.QueryRow("UPDATE products SET name=$1, price=$2 WHERE id=$3 RETURNING id,name,price", req.Name, req.Price, id).Scan(&product.ID, &product.Name, &product.Price)
+	err := db.QueryRow(query, params...).Scan(&product.ID, &product.Name, &product.Price)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusNotFound, gin.H{"error": "Product not found"})
