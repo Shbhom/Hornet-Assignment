@@ -23,6 +23,11 @@ type Product struct {
 	Price float64 `json:"price"`
 }
 
+type responseProduct struct {
+	Name  string  `json:"name"`
+	Price float64 `json:"Price"`
+}
+
 type createProductRequest struct {
 	Name  string  `json:"name" binding:"required"`
 	Price float64 `json:"Price" binding:"required,gt=0"`
@@ -95,14 +100,35 @@ func main() {
 	router.PUT("/products/:id", updateProduct)
 	router.DELETE("/products/:id", deleteProduct)
 
-	log.Println("Server starting on :8080")
+	log.Println("Server starting on :8000")
 	if err := router.Run(":8000"); err != nil {
 		log.Fatal("Failed to start server")
 	}
 }
 
 func getAllProducts(c *gin.Context) {
-	rows, err := db.Query("SELECT * FROM products")
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
+
+	if page < 1 {
+		page = 1
+	}
+	// considering that limit gt 100 is not good for UI
+	if limit < 0 || limit > 100 {
+		limit = 10
+	}
+
+	offset := (page - 1) * limit
+
+	var total int
+
+	err := db.QueryRow("SELECT COUNT(*) FROM products").Scan(&total)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	rows, err := db.Query("SELECT * FROM products ORDER BY id LIMIT $1 OFFSET $2", limit, offset)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to Fetch Products"})
 		return
@@ -119,7 +145,22 @@ func getAllProducts(c *gin.Context) {
 		// fmt.Println(product)
 		products = append(products, product)
 	}
-	c.JSON(http.StatusOK, products)
+
+	totalPages := total / limit
+	if total%limit != 0 {
+		totalPages++
+	}
+	c.JSON(
+		http.StatusOK,
+		gin.H{
+			"data": products,
+			"metadata": gin.H{
+				"currentPage":   page,
+				"totalProducts": total,
+				"limit":         limit,
+				"totalpages":    totalPages,
+			},
+		})
 }
 
 func getProductById(c *gin.Context) {
@@ -174,11 +215,11 @@ func createProduct(c *gin.Context) {
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 	}
-	var product Product
+	var product responseProduct
 
 	err := db.QueryRow(
-		`INSERT INTO products (name,price) values ($1,$2) RETURNING id,name,price`,
-		req.Name, req.Price).Scan(&product.ID, &product.Name, &product.Price)
+		`INSERT INTO products (name,price) values ($1,$2) RETURNING name,price`,
+		req.Name, req.Price).Scan(&product.Name, &product.Price)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
